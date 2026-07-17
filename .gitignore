@@ -73,8 +73,8 @@ lint/outputs/
 lint/tmp/
 # lint/reports/
 
-# Gradle wrapper binaries
-gradle/wrapper/gradle-wrapper.jar
+# Gradle wrapper binaries (committed for reproducibility)
+# (Do NOT ignore gradle-wrapper.jar — CI needs it to run ./gradlew)
 
 # macOS
 .DS_Store

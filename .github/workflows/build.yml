@@ -32,16 +32,15 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: gradle
 
-      - name: Set up Gradle
+      - name: Set up Gradle 8.11.1
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
           validate-wrappers: false
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x ./gradlew
+      - name: Gradle version
+        run: gradle --version
 
       - name: Cache Gradle packages
         uses: actions/cache@v4
@@ -52,17 +51,14 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/libs.versions.toml') }}
           restore-keys: gradle-${{ runner.os }}-
 
-      - name: Spotless / ktlint-free sanity (skip if no plugin)
-        run: ./gradlew --no-daemon help -q || true
-
       - name: Build debug APK
-        run: ./gradlew --no-daemon assembleDebug --stacktrace
+        run: gradle assembleDebug --stacktrace --no-daemon
 
       - name: Build release APK
-        run: ./gradlew --no-daemon assembleRelease --stacktrace
+        run: gradle assembleRelease --stacktrace --no-daemon
 
       - name: Run unit tests
-        run: ./gradlew --no-daemon testDebugUnitTest --continue || true
+        run: gradle testDebugUnitTest --continue --no-daemon || true
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4

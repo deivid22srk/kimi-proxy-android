@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -71,6 +72,8 @@ fun LoginScreen(onCaptured: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Header()
+
+        GoogleLoginHint()
 
         StatusBanner(state = captureState, sendStatus = sendStatus) {
             onCaptured()
@@ -223,6 +226,48 @@ private fun ActionsRow(onOpenBrowser: () -> Unit) {
             Icon(Icons.Outlined.OpenInBrowser, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.login_action_open_browser))
+        }
+    }
+}
+
+@Composable
+private fun GoogleLoginHint() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Icon(
+                Icons.Outlined.WarningAmber,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(
+                    "Login com Google",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Se o Google bloquear (\"navegador não seguro\"), tente: " +
+                        "1) fechar e abrir de novo; " +
+                        "2) usar email/senha no Kimi; " +
+                        "3) logar no navegador do celular e voltar aqui — " +
+                        "a sessão será detectada automaticamente.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            }
         }
     }
 }

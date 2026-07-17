@@ -2,6 +2,7 @@ package com.kimi.proxy.android.ui.components
 
 import android.annotation.SuppressLint
 import android.util.Log
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
@@ -47,11 +48,18 @@ sealed class CaptureState {
  * - We attach a custom [WebViewClient] to intercept every outgoing request and
  *   sniff the `Authorization: Bearer` header on `kimi.com/apiv2/` calls. This
  *   mirrors the Playwright script in `kimi-proxy-web/scripts/add-account.mjs`.
- * - For Google sign-in we let the WebView open popups via [WebChromeClient]
- *   `onCreateWindow` — Kimi's "Continue with Google" button uses a popup,
- *   so we forward it to a new in-app WebView rather than blocking it.
- * - We force desktop user-agent so Kimi serves the full web UI (not the
- *   limited mobile page).
+ * - For Google sign-in we MUST enable `setSupportMultipleWindows(true)` and
+ *   properly handle `onCreateWindow` — Google's OAuth flow opens a popup,
+ *   and Google's anti-abuse system blocks WebViews that look automated.
+ *   We bypass the detection by:
+ *     1. Using a real Chrome **mobile** UA (no "wv" / "Version/4.0" markers).
+ *     2. Injecting stealth JS on every page load that undefines
+ *        `navigator.webdriver`, fakes `window.chrome.runtime`, populates
+ *        `navigator.plugins` and `navigator.languages`.
+ *     3. Adding the popup WebView to the view hierarchy (otherwise it
+ *        stays invisible and the user can never complete OAuth).
+ * - The same hardening is applied to the popup WebView created in
+ *   `onCreateWindow` so Google's OAuth page sees a "real" browser.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -87,21 +95,7 @@ fun KimiLoginWebView(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    settings.databaseEnabled = true
-                    settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-                    settings.userAgentString = DESKTOP_UA
-                    settings.setSupportZoom(true)
-                    settings.builtInZoomControls = true
-                    settings.displayZoomControls = false
-                    settings.loadWithOverviewMode = true
-                    settings.useWideViewPort = true
-                    settings.allowFileAccess = false
-                    settings.allowContentAccess = true
-                    settings.mediaPlaybackRequiresUserGesture = false
-                    settings.javaScriptCanOpenWindowsAutomatically = true
-                    settings.setGeolocationEnabled(false)
+                    applyHardening()
 
                     // Allow third-party cookies (Google login sets them).
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
@@ -111,25 +105,62 @@ fun KimiLoginWebView(
                     }
 
                     webChromeClient = object : WebChromeClient() {
-                        // Google login opens a popup window — accept it.
+                        /**
+                         * Google OAuth opens a popup window.
+                         * We create a new WebView, harden it the same way,
+                         * ADD it to the parent's view hierarchy (critical —
+                         * otherwise the popup is invisible), and hide the
+                         * parent until the popup closes.
+                         */
                         override fun onCreateWindow(
                             view: WebView?,
                             isDialog: Boolean,
                             isUserGesture: Boolean,
                             resultMsg: android.os.Message?
                         ): Boolean {
-                            val newView = WebView(ctx)
-                            newView.settings.javaScriptEnabled = true
-                            newView.settings.domStorageEnabled = true
-                            newView.settings.userAgentString = DESKTOP_UA
-                            newView.webViewClient = KimiWebViewClient { state ->
-                                onStateChange(state)
+                            val parent = view ?: return false
+                            val rootView = parent.parent as? ViewGroup
+                                ?: (parent.context as? android.app.Activity)
+                                    ?.findViewById<ViewGroup>(android.R.id.content)
+                                ?: return false
+
+                            val popup = WebView(parent.context).apply {
+                                layoutParams = FrameLayout.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT
+                                )
+                                applyHardening()
+                                CookieManager.getInstance()
+                                    .setAcceptThirdPartyCookies(this, true)
+                                webViewClient = KimiWebViewClient { state ->
+                                    onStateChange(state)
+                                }
+                                webChromeClient = this
                             }
-                            newView.webChromeClient = this
+
+                            // Hide parent, show popup on top.
+                            parent.visibility = View.INVISIBLE
+                            rootView.addView(popup)
+
+                            // Track popup so onCloseWindow can clean up.
+                            popup.tag = parent
+
                             val transport = resultMsg?.obj as? WebView.WebViewTransport
-                            transport?.webView = newView
+                            transport?.webView = popup
                             resultMsg?.sendToTarget()
                             return true
+                        }
+
+                        /**
+                         * Restore parent visibility when the OAuth popup closes.
+                         */
+                        override fun onCloseWindow(window: WebView?) {
+                            val popup = window ?: return
+                            val parent = popup.tag as? WebView
+                            val root = popup.parent as? ViewGroup
+                            root?.removeView(popup)
+                            popup.destroy()
+                            parent?.visibility = View.VISIBLE
                         }
                     }
 
@@ -143,6 +174,117 @@ fun KimiLoginWebView(
     }
 }
 
+/**
+ * Configures a WebView to look like a real Chrome browser to Google's
+ * anti-abuse system. Applied to BOTH the main WebView and any OAuth
+ * popups created via [WebChromeClient.onCreateWindow].
+ */
+@SuppressLint("SetJavaScriptEnabled")
+private fun WebView.applyHardening() {
+    settings.apply {
+        javaScriptEnabled = true
+        domStorageEnabled = true
+        databaseEnabled = true
+        cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+        // Mobile Chrome UA — NO "wv" suffix and NO "Version/4.0".
+        // Both markers are checked by Google's bot detection.
+        userAgentString = MOBILE_UA
+        setSupportZoom(true)
+        builtInZoomControls = true
+        displayZoomControls = false
+        loadWithOverviewMode = true
+        useWideViewPort = true
+        allowFileAccess = false
+        allowContentAccess = true
+        mediaPlaybackRequiresUserGesture = false
+        // CRITICAL for Google OAuth popup flow.
+        javaScriptCanOpenWindowsAutomatically = true
+        setSupportMultipleWindows(true)
+        setGeolocationEnabled(false)
+    }
+}
+
+/**
+ * Stealth JS that masks every signal Google's bot detection checks:
+ * - `navigator.webdriver` → undefined
+ * - `window.chrome.runtime` → exists (real Chrome has it)
+ * - `navigator.plugins` → non-empty array (real Chrome has 5 PDF plugins)
+ * - `navigator.languages` → realistic array
+ * - `navigator.permissions.query` → consistent with Notification.permission
+ *
+ * Injected BEFORE any page script runs via [WebViewClient.onPageStarted].
+ */
+private const val STEALTH_JS = """
+(function() {
+    try {
+        // 1. Hide webdriver flag
+        Object.defineProperty(navigator, 'webdriver', {
+            get: () => undefined, configurable: true
+        });
+
+        // 2. Fake window.chrome object
+        if (!window.chrome) {
+            window.chrome = {};
+        }
+        if (!window.chrome.runtime) {
+            window.chrome.runtime = {
+                OnInstalledReason: { INSTALL: 'install', UPDATE: 'update', CHROME_UPDATE: 'chrome_update', SHARED_MODULE_UPDATE: 'shared_module_update' },
+                OnRestartRequiredReason: { APP_UPDATE: 'app_update', OS_UPDATE: 'os_update', PERIODIC: 'periodic' }
+            };
+        }
+
+        // 3. Fake plugins (real Chrome has 5 PDF plugins)
+        Object.defineProperty(navigator, 'plugins', {
+            get: () => {
+                const pdf = { name: 'PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' };
+                const arr = [
+                    pdf,
+                    { name: 'Chrome PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+                    { name: 'Chromium PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+                    { name: 'Microsoft Edge PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+                    { name: 'WebKit built-in PDF', filename: 'internal-pdf-viewer', description: 'Portable Document Format' }
+                ];
+                arr.refresh = function() {};
+                arr.item = function(i) { return arr[i] || null; };
+                arr.namedItem = function(n) { return arr.find(p => p.name === n) || null; };
+                return arr;
+            },
+            configurable: true
+        });
+
+        // 4. Realistic languages
+        Object.defineProperty(navigator, 'languages', {
+            get: () => ['pt-BR', 'pt', 'en-US', 'en'],
+            configurable: true
+        });
+
+        // 5. Fix permissions.query to be consistent with Notification.permission
+        if (window.navigator.permissions && window.navigator.permissions.query) {
+            const origQuery = window.navigator.permissions.query.bind(window.navigator.permissions);
+            window.navigator.permissions.query = function(p) {
+                if (p && p.name === 'notifications') {
+                    return Promise.resolve({ state: (typeof Notification !== 'undefined' ? Notification.permission : 'default'), onchange: null });
+                }
+                return origQuery(p);
+            };
+        }
+
+        // 6. WebGL vendor/renderer spoofing (some bot checks use this)
+        try {
+            const getParameter = WebGLRenderingContext.prototype.getParameter;
+            WebGLRenderingContext.prototype.getParameter = function(parameter) {
+                // UNMASKED_VENDOR_WEBGL = 37445, UNMASKED_RENDERER_WEBGL = 37446
+                if (parameter === 37445) return 'Qualcomm';
+                if (parameter === 37446) return 'Adreno (TM) 740';
+                return getParameter.call(this, parameter);
+            };
+        } catch (e) {}
+    } catch (e) {
+        // Silent fail — page must still load.
+    }
+})();
+"""
+
 private class KimiWebViewClient(
     private val onState: (CaptureState) -> Unit
 ) : WebViewClient() {
@@ -150,6 +292,10 @@ private class KimiWebViewClient(
     private var captured = false
 
     override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+        // Inject stealth JS BEFORE any page script runs.
+        // evaluateJavascript runs in the page's main world, so the overrides
+        // take effect before Google's bot-detection script executes.
+        view?.evaluateJavascript(STEALTH_JS, null)
         onState(CaptureState.Loading)
     }
 
@@ -158,17 +304,23 @@ private class KimiWebViewClient(
         request: WebResourceRequest?
     ): Boolean {
         val url = request?.url?.toString() ?: return false
-        // Keep Kimi + Google OAuth in-app.
+        // Keep Kimi + Google OAuth + common IdPs in-app.
         if (url.startsWith("https://www.kimi.com") ||
             url.startsWith("https://kimi.com") ||
             url.startsWith("https://accounts.google.com") ||
+            url.startsWith("https://accounts.gstatic.com") ||
+            url.startsWith("https://www.google.com/accounts") ||
+            url.startsWith("https://www.google.com/recaptcha") ||
+            url.startsWith("https://www.recaptcha.net") ||
+            url.startsWith("https://securetoken.google.com") ||
             url.startsWith("https://login.microsoftonline.com") ||
             url.startsWith("https://www.linkedin.com") ||
             url.startsWith("https://github.com/login")
         ) {
             return false
         }
-        // External deep links (mailto:, tel:, intent:) → let system handle.
+        // External deep links (mailto:, tel:, intent:, custom schemes) →
+        // let the system handle them.
         if (url.startsWith("http://") || url.startsWith("https://")) return false
         return true
     }
@@ -234,6 +386,9 @@ private fun buildAccount(
 }
 
 private const val KIMI_HOME = "https://www.kimi.com/"
-private const val DESKTOP_UA =
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) " +
-        "Chrome/124.0.0.0 Safari/537.36"
+
+// Mobile Chrome UA — NO "wv" suffix and NO "Version/4.0" marker.
+// Both are checked by Google's bot detection as WebView indicators.
+private const val MOBILE_UA =
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro Build/UQ1A.240205.004) " +
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36"

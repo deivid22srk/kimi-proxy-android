@@ -1,0 +1,62 @@
+<resources>
+    <string name="app_name">Kimi Proxy</string>
+    <string name="app_tagline">Login &amp; gerenciador de tokens</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Início</string>
+    <string name="nav_login">Login</string>
+    <string name="nav_accounts">Contas</string>
+    <string name="nav_settings">Configurações</string>
+
+    <!-- Home -->
+    <string name="home_welcome_title">Kimi Proxy Android</string>
+    <string name="home_welcome_subtitle">Faça login na sua conta Kimi e capture o token JWT para usar com o proxy local</string>
+    <string name="home_action_login">Fazer login no Kimi</string>
+    <string name="home_action_accounts">Ver contas salvas</string>
+    <string name="home_action_settings">Configurar proxy</string>
+    <string name="home_status_connected">Proxy conectado</string>
+    <string name="home_status_disconnected">Proxy não verificado</string>
+
+    <!-- Login -->
+    <string name="login_title">Login no Kimi</string>
+    <string name="login_subtitle">Faça login normalmente. O app irá capturar o token automaticamente.</string>
+    <string name="login_hint_google">Você pode usar login Google — ele abre em janela separada.</string>
+    <string name="login_status_waiting">Aguardando login…</string>
+    <string name="login_status_captured">Token capturado!</string>
+    <string name="login_action_reload">Recarregar</string>
+    <string name="login_action_stop">Parar</string>
+    <string name="login_action_open_browser">Abrir no navegador</string>
+
+    <!-- Accounts -->
+    <string name="accounts_title">Contas</string>
+    <string name="accounts_empty">Nenhuma conta salva ainda.\nFaça login para capturar o token.</string>
+    <string name="accounts_action_send">Enviar para o proxy</string>
+    <string name="accounts_action_copy">Copiar token</string>
+    <string name="accounts_action_delete">Excluir</string>
+    <string name="accounts_action_details">Ver detalhes</string>
+    <string name="accounts_copied">Token copiado</string>
+    <string name="accounts_sent">Conta enviada ao proxy</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Configurações</string>
+    <string name="settings_proxy_url">URL do proxy</string>
+    <string name="settings_proxy_url_hint">http://192.168.0.10:8080</string>
+    <string name="settings_proxy_api_key">API Key (opcional)</string>
+    <string name="settings_proxy_test">Testar conexão</string>
+    <string name="settings_theme">Tema</string>
+    <string name="settings_theme_system">Sistema</string>
+    <string name="settings_theme_light">Claro</string>
+    <string name="settings_theme_dark">Escuro</string>
+    <string name="settings_dynamic_color">Cor dinâmica (Material You)</string>
+    <string name="settings_about">Sobre</string>
+    <string name="settings_about_text">App Android para captura de tokens JWT do Kimi, com WebView que suporta login via Google. Envia contas para o proxy kimi-proxy-web rodando localmente.</string>
+    <string name="settings_test_ok">Conexão OK</string>
+    <string name="settings_test_fail">Falha: %1$s</string>
+
+    <!-- Common -->
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_confirm">Confirmar</string>
+    <string name="action_close">Fechar</string>
+    <string name="action_save">Salvar</string>
+    <string name="error_generic">Algo deu errado</string>
+</resources>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="accounts.json" />
+        <exclude domain="sharedpref" path="proxy_settings.json" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="accounts.json" />
+        <exclude domain="sharedpref" path="proxy_settings.json" />
+    </device-transfer>
+</data-extraction-rules>

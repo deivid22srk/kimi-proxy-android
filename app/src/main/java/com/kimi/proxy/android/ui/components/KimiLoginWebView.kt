@@ -124,6 +124,7 @@ fun KimiLoginWebView(
                                     ?.findViewById<ViewGroup>(android.R.id.content)
                                 ?: return false
 
+                            val chromeClient = this
                             val popup = WebView(parent.context).apply {
                                 layoutParams = FrameLayout.LayoutParams(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -135,7 +136,7 @@ fun KimiLoginWebView(
                                 webViewClient = KimiWebViewClient { state ->
                                     onStateChange(state)
                                 }
-                                webChromeClient = this
+                                webChromeClient = chromeClient
                             }
 
                             // Hide parent, show popup on top.

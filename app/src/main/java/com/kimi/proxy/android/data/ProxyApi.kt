@@ -53,9 +53,12 @@ class ProxyApi(private val context: Context) {
     }
 
     /**
-     * Push an account payload to the proxy. The endpoint is a small convention
-     * used by hardened forks of kimi-proxy-web: POST /__accounts.
-     * Returns true if the server acknowledged (2xx), false otherwise.
+     * Push an account payload to the proxy via POST /__accounts.
+     *
+     * This endpoint is implemented by the deivid22srk/kimi-proxy-web fork
+     * (NOT the original Maicon501a/kimi-proxy-web). When the user is
+     * running the original proxy, the request returns 404 and we surface
+     * a helpful message pointing them to the fork.
      */
     suspend fun pushAccount(account: KimiAccount, settings: ProxySettings): ProxyTestResult =
         withContext(Dispatchers.IO) {
@@ -72,12 +75,22 @@ class ProxyApi(private val context: Context) {
             }
             try {
                 client.newCall(builder.build()).execute().use { res ->
-                    val latency = 0L
-                    if (res.isSuccessful) ProxyTestResult(true, "HTTP ${res.code}", latency)
-                    else ProxyTestResult(false, "HTTP ${res.code}", latency)
+                    when {
+                        res.isSuccessful -> ProxyTestResult(true, "HTTP ${res.code}")
+                        res.code == 404 -> ProxyTestResult(
+                            false,
+                            "Proxy não tem o endpoint /__accounts. " +
+                                "Use o fork deivid22srk/kimi-proxy-web."
+                        )
+                        res.code == 401 -> ProxyTestResult(
+                            false,
+                            "API key inválida (HTTP 401)"
+                        )
+                        else -> ProxyTestResult(false, "HTTP ${res.code}")
+                    }
                 }
             } catch (t: Throwable) {
-                ProxyTestResult(false, t.message ?: "erro desconhecido")
+                ProxyTestResult(false, t.message ?: "erro de rede")
             }
         }
 

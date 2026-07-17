@@ -35,7 +35,9 @@ data class KimiAccount(
 
 @Serializable
 data class ProxySettings(
-    val baseUrl: String = "http://10.0.2.2:8080",
+    // Default to localhost:8080 — matches the Termux use case where the
+    // proxy runs on the same device as the app.
+    val baseUrl: String = "http://127.0.0.1:8080",
     val apiKey: String = "",
     val autoSendOnCapture: Boolean = true
 )
